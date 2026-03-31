@@ -172,24 +172,55 @@ function copyRows(table, columns, client) {
     return Promise.resolve();
   }
 
-  const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
-  const insertSql = `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`;
+  const chunkSize = 250;
+  const chunks = [];
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    chunks.push(rows.slice(i, i + chunkSize));
+  }
 
-  return rows.reduce(
-    (chain, row) =>
-      chain.then(() => client.query(insertSql, columns.map((col) => row[col]))),
-    Promise.resolve()
-  ).then(() => {
-    console.log(`- ${table}: ${rows.length} rows`);
-  });
+  return chunks
+    .reduce((chain, chunk) => {
+      return chain.then(async () => {
+        const values = [];
+        const valueGroups = chunk.map((row, rowIdx) => {
+          const start = rowIdx * columns.length;
+          values.push(...columns.map((col) => row[col]));
+          const placeholders = columns.map((_, colIdx) => `$${start + colIdx + 1}`).join(", ");
+          return `(${placeholders})`;
+        });
+
+        const insertSql = `INSERT INTO ${table} (${columns.join(", ")}) VALUES ${valueGroups.join(", ")}`;
+        await client.query(insertSql, values);
+      });
+    }, Promise.resolve())
+    .then(() => {
+      console.log(`- ${table}: ${rows.length} rows`);
+    });
 }
 
-async function setSequence(client, sequence, table, idColumn) {
+async function setSequence(client, table, idColumn) {
+  if (!idColumn) return;
+
+  const { rows } = await client.query(
+    "SELECT pg_get_serial_sequence($1, $2) AS sequence_name",
+    [table, idColumn]
+  );
+  const sequence = rows[0]?.sequence_name;
   if (!sequence) return;
+
   await client.query(
-    `SELECT setval($1, COALESCE((SELECT MAX(${idColumn}) FROM ${table}), 1), true)`,
+    `SELECT setval($1::regclass, COALESCE((SELECT MAX(${idColumn}) FROM ${table}), 1), true)`,
     [sequence]
   );
+}
+
+async function ensureAutoId(client, table, idColumn) {
+  const sequenceName = `${table}_${idColumn}_seq`;
+  await client.query(`CREATE SEQUENCE IF NOT EXISTS ${sequenceName}`);
+  await client.query(
+    `ALTER TABLE ${table} ALTER COLUMN ${idColumn} SET DEFAULT nextval('${sequenceName}')`
+  );
+  await client.query(`ALTER SEQUENCE ${sequenceName} OWNED BY ${table}.${idColumn}`);
 }
 
 async function main() {
@@ -197,6 +228,8 @@ async function main() {
   try {
     console.log("Bootstrapping Supabase schema...");
     await client.query(schemaSql);
+    await ensureAutoId(client, "orders", "order_id");
+    await ensureAutoId(client, "order_items", "order_item_id");
 
     console.log("Clearing existing data...");
     await client.query(`
@@ -214,7 +247,7 @@ async function main() {
     console.log("Copying data from SQLite...");
     for (const cfg of tableConfigs) {
       await copyRows(cfg.table, cfg.columns, client);
-      await setSequence(client, cfg.sequence, cfg.table, cfg.idColumn);
+      await setSequence(client, cfg.table, cfg.idColumn);
     }
 
     console.log("Supabase migration complete.");
