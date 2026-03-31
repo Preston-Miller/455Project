@@ -1,0 +1,13 @@
+{
+  "model_version": "1.1.0",
+  "trained_at_utc": "2026-03-26T21:00:52.196387",
+  "feature_list": [
+    "num_items",
+    "customer_age",
+    "order_dow",
+    "order_month"
+  ],
+  "label": "late_delivery",
+  "warehouse_table": "modeling_orders",
+  "warehouse_rows": 5000
+}
