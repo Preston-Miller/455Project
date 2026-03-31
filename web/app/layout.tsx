@@ -22,8 +22,8 @@ export default async function RootLayout({
   const customerId = cookieStore.get("customer_id")?.value;
   let customer: Customer | undefined;
   if (customerId) {
-    customer = queryOne<Customer>(
-      "SELECT customer_id, full_name, email FROM customers WHERE customer_id = ?",
+    customer = await queryOne<Customer>(
+      "SELECT customer_id, full_name, email FROM customers WHERE customer_id = $1",
       [customerId]
     );
   }

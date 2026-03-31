@@ -13,8 +13,8 @@ interface PriorityRow {
   prediction_timestamp: string;
 }
 
-export default function WarehousePriorityPage() {
-  const rows = query<PriorityRow>(`
+export default async function WarehousePriorityPage() {
+  const rows = await query<PriorityRow>(`
     SELECT
       o.order_id,
       o.order_datetime,
@@ -131,11 +131,10 @@ export default function WarehousePriorityPage() {
       <div className="card">
         <div className="card-title">How This Works</div>
         <p style={{ fontSize: "14px", color: "var(--muted)", lineHeight: 1.7 }}>
-          A logistic regression model was trained on historical order data (shipment delays, customer age,
-          order timing, item counts). The inference job scores each unfulfilled order and writes a
-          <code> late_delivery_probability </code> to the <code>order_predictions</code> table.
-          This page reads that table and surfaces the highest-risk orders at the top.
-          The app never runs ML code itself — it simply queries prediction results like any other table.
+          The scoring API computes late-delivery probabilities from live order features
+          (item counts, customer age, day-of-week, and month), then writes results to
+          <code> order_predictions</code>. This page reads that table and surfaces the
+          highest-risk unfulfilled orders first so the warehouse can prioritize fulfillment.
         </p>
       </div>
     </div>

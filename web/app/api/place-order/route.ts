@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getDb, queryOne } from "@/lib/db";
+import { queryOne, queryWithClient, withTransaction } from "@/lib/db";
 
 interface LineItem {
   product_id: number;
@@ -31,16 +31,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No line items provided." }, { status: 400 });
   }
 
-  const db = getDb();
-
   // Validate and price all products
   const pricedLines: Array<{ product_id: number; quantity: number; unit_price: number; line_total: number }> = [];
   for (const line of lines) {
     if (!line.product_id || line.quantity < 1) {
       return NextResponse.json({ error: "Invalid line item." }, { status: 400 });
     }
-    const product = queryOne<Product>(
-      "SELECT product_id, price FROM products WHERE product_id = ? AND is_active = 1",
+    const product = await queryOne<Product>(
+      "SELECT product_id, price FROM products WHERE product_id = $1 AND is_active = 1",
       [line.product_id]
     );
     if (!product) {
@@ -57,29 +55,31 @@ export async function POST(request: Request) {
   const order_datetime = new Date().toISOString();
 
   try {
-    const insertOrder = db.prepare(`
-      INSERT INTO orders
-        (customer_id, order_datetime, payment_method, device_type, ip_country,
-         promo_used, order_subtotal, shipping_fee, tax_amount, order_total,
-         risk_score, is_fraud, fulfilled)
-      VALUES (?, ?, 'credit_card', 'web', 'US', 0, ?, ?, ?, ?, 0, 0, 0)
-    `);
+    const order_id = await withTransaction(async (client) => {
+      const inserted = await queryWithClient<{ order_id: number }>(
+        client,
+        `INSERT INTO orders
+          (customer_id, order_datetime, payment_method, device_type, ip_country,
+           promo_used, order_subtotal, shipping_fee, tax_amount, order_total,
+           risk_score, is_fraud, fulfilled)
+         VALUES ($1, $2, 'credit_card', 'web', 'US', 0, $3, $4, $5, $6, 0, 0, 0)
+         RETURNING order_id`,
+        [Number(customerId), order_datetime, order_subtotal, shipping_fee, tax_amount, order_total]
+      );
+      const newOrderId = inserted[0].order_id;
 
-    const insertItem = db.prepare(`
-      INSERT INTO order_items (order_id, product_id, quantity, unit_price, line_total)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-
-    const doInsert = db.transaction(() => {
-      const result = insertOrder.run(customerId, order_datetime, order_subtotal, shipping_fee, tax_amount, order_total);
-      const order_id = result.lastInsertRowid as number;
       for (const line of pricedLines) {
-        insertItem.run(order_id, line.product_id, line.quantity, line.unit_price, line.line_total);
+        await queryWithClient(
+          client,
+          `INSERT INTO order_items (order_id, product_id, quantity, unit_price, line_total)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [newOrderId, line.product_id, line.quantity, line.unit_price, line.line_total]
+        );
       }
-      return order_id;
+
+      return newOrderId;
     });
 
-    const order_id = doInsert();
     return NextResponse.json({ order_id });
   } catch (err) {
     console.error("Order insert error:", err);

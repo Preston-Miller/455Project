@@ -36,9 +36,9 @@ export default function ScoringClient() {
       <div className="card">
         <div className="card-title">Run ML Inference Job</div>
         <p style={{ fontSize: "14px", color: "var(--muted)", marginBottom: "20px", lineHeight: 1.7 }}>
-          Clicking the button below runs <code>jobs/run_inference.py</code> on the server.
-          The script loads the trained model, scores all unfulfilled orders in <code>shop.db</code>,
-          and writes predictions to the <code>order_predictions</code> table.
+          Clicking the button runs the deployed scoring API on the server.
+          It scores all unfulfilled orders and writes probabilities to
+          the <code>order_predictions</code> table.
         </p>
         <button
           className="btn btn-primary btn-lg"
@@ -100,24 +100,20 @@ export default function ScoringClient() {
         <table style={{ fontSize: "14px" }}>
           <tbody>
             <tr>
-              <td style={{ color: "var(--muted)", width: "160px", padding: "6px 0" }}>ETL script</td>
-              <td><code>jobs/etl_build_warehouse.py</code></td>
+              <td style={{ color: "var(--muted)", width: "160px", padding: "6px 0" }}>Scoring endpoint</td>
+              <td><code>web/app/api/run-scoring/route.ts</code></td>
             </tr>
             <tr>
-              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Training script</td>
-              <td><code>jobs/train_model.py</code></td>
+              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Input tables</td>
+              <td><code>orders, customers, order_items</code></td>
             </tr>
             <tr>
-              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Inference script</td>
-              <td><code>jobs/run_inference.py</code></td>
+              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Output table</td>
+              <td><code>order_predictions</code></td>
             </tr>
             <tr>
-              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Model artifact</td>
-              <td><code>artifacts/late_delivery_model.sav</code></td>
-            </tr>
-            <tr>
-              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Writes to</td>
-              <td><code>shop.db → order_predictions</code></td>
+              <td style={{ color: "var(--muted)", padding: "6px 0" }}>Runs on</td>
+              <td><code>Vercel serverless function</code></td>
             </tr>
           </tbody>
         </table>

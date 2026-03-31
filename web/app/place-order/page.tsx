@@ -15,7 +15,7 @@ export default async function PlaceOrderPage() {
   const customerId = cookieStore.get("customer_id")?.value;
   if (!customerId) redirect("/select-customer");
 
-  const products = query<Product>(
+  const products = await query<Product>(
     "SELECT product_id, product_name, category, price FROM products WHERE is_active = 1 ORDER BY category, product_name"
   );
 

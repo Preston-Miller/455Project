@@ -1,41 +1,63 @@
-import Database from "better-sqlite3";
-import path from "path";
+import { Pool, PoolClient } from "pg";
 
-// shop.db lives one level above the web/ folder (project root)
-const DB_PATH = path.join(process.cwd(), "..", "shop.db");
+let _pool: Pool | null = null;
 
-let _db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!_db) {
-    _db = new Database(DB_PATH);
-    _db.pragma("journal_mode = WAL");
-    _db.pragma("foreign_keys = ON");
+function getDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL ?? process.env.SUPABASE_DB_URL;
+  if (!url) {
+    throw new Error("Missing DATABASE_URL (or SUPABASE_DB_URL) environment variable.");
   }
-  return _db;
+  return url;
 }
 
-export function query<T = Record<string, unknown>>(
+function getPool(): Pool {
+  if (!_pool) {
+    _pool = new Pool({
+      connectionString: getDatabaseUrl(),
+      ssl: { rejectUnauthorized: false },
+    });
+  }
+  return _pool;
+}
+
+export async function query<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = []
-): T[] {
-  return getDb().prepare(sql).all(...params) as T[];
+): Promise<T[]> {
+  const result = await getPool().query(sql, params);
+  return result.rows as T[];
 }
 
-export function queryOne<T = Record<string, unknown>>(
+export async function queryOne<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = []
-): T | undefined {
-  return getDb().prepare(sql).get(...params) as T | undefined;
+): Promise<T | undefined> {
+  const rows = await query<T>(sql, params);
+  return rows[0];
 }
 
-export function run(
+export async function queryWithClient<T = Record<string, unknown>>(
+  client: PoolClient,
   sql: string,
   params: unknown[] = []
-): Database.RunResult {
-  return getDb().prepare(sql).run(...params);
+): Promise<T[]> {
+  const result = await client.query(sql, params);
+  return result.rows as T[];
 }
 
-export function transaction<T>(fn: () => T): T {
-  return getDb().transaction(fn)();
+export async function withTransaction<T>(
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }

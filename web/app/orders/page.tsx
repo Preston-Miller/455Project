@@ -16,17 +16,17 @@ export default async function OrdersPage() {
   const customerId = cookieStore.get("customer_id")?.value;
   if (!customerId) redirect("/select-customer");
 
-  const customer = queryOne<{ full_name: string }>(
-    "SELECT full_name FROM customers WHERE customer_id = ?",
+  const customer = await queryOne<{ full_name: string }>(
+    "SELECT full_name FROM customers WHERE customer_id = $1",
     [customerId]
   );
 
-  const orders = query<Order>(
+  const orders = await query<Order>(
     `SELECT o.order_id, o.order_datetime, o.order_total, o.fulfilled,
             COUNT(oi.order_item_id) AS item_count
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.order_id
-     WHERE o.customer_id = ?
+     WHERE o.customer_id = $1
      GROUP BY o.order_id
      ORDER BY o.order_datetime DESC`,
     [customerId]

@@ -31,24 +31,24 @@ export default async function DashboardPage() {
   const customerId = cookieStore.get("customer_id")?.value;
   if (!customerId) redirect("/select-customer");
 
-  const customer = queryOne<Customer>(
-    "SELECT customer_id, full_name, email, city, state, loyalty_tier, customer_segment FROM customers WHERE customer_id = ?",
+  const customer = await queryOne<Customer>(
+    "SELECT customer_id, full_name, email, city, state, loyalty_tier, customer_segment FROM customers WHERE customer_id = $1",
     [customerId]
   );
   if (!customer) redirect("/select-customer");
 
-  const stats = queryOne<Stats>(
+  const stats = await queryOne<Stats>(
     `SELECT COUNT(*) AS total_orders, ROUND(COALESCE(SUM(order_total), 0), 2) AS total_spend
-     FROM orders WHERE customer_id = ?`,
+     FROM orders WHERE customer_id = $1`,
     [customerId]
   );
 
-  const recentOrders = query<RecentOrder>(
+  const recentOrders = await query<RecentOrder>(
     `SELECT o.order_id, o.order_datetime, o.order_total, o.fulfilled,
             COUNT(oi.order_item_id) AS item_count
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.order_id
-     WHERE o.customer_id = ?
+     WHERE o.customer_id = $1
      GROUP BY o.order_id
      ORDER BY o.order_datetime DESC
      LIMIT 5`,

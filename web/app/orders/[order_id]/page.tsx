@@ -47,23 +47,23 @@ export default async function OrderDetailPage({
   const { order_id } = await params;
   const { success } = await searchParams;
 
-  const order = queryOne<Order>(
-    "SELECT * FROM orders WHERE order_id = ? AND customer_id = ?",
+  const order = await queryOne<Order>(
+    "SELECT * FROM orders WHERE order_id = $1 AND customer_id = $2",
     [order_id, customerId]
   );
   if (!order) notFound();
 
-  const items = query<LineItem>(
+  const items = await query<LineItem>(
     `SELECT oi.order_item_id, p.product_name, p.category, oi.quantity, oi.unit_price, oi.line_total
      FROM order_items oi
      JOIN products p ON p.product_id = oi.product_id
-     WHERE oi.order_id = ?
+     WHERE oi.order_id = $1
      ORDER BY oi.order_item_id`,
     [order_id]
   );
 
-  const prediction = queryOne<Prediction>(
-    "SELECT late_delivery_probability, predicted_late_delivery, prediction_timestamp FROM order_predictions WHERE order_id = ?",
+  const prediction = await queryOne<Prediction>(
+    "SELECT late_delivery_probability, predicted_late_delivery, prediction_timestamp FROM order_predictions WHERE order_id = $1",
     [order_id]
   );
 
